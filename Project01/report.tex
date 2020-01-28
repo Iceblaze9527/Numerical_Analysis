@@ -1,0 +1,609 @@
+\documentclass{article}
+\usepackage{ctex}
+\usepackage[fleqn]{amsmath}
+\usepackage{amssymb}
+\usepackage{bbm}
+\usepackage[colorlinks]{hyperref}
+\usepackage{graphicx}
+\usepackage{float}
+
+\graphicspath{{figs/}}
+\renewcommand {\thefigure} {\arabic{section}.\arabic{figure}}
+
+\title
+{
+	\normalfont\normalsize
+	\textsc{数值分析与算法}\\ % Your university, school and/or department name(s)
+	\vspace{7cm} % Whitespace
+	{\huge 第一次大作业实验报告}\\ % The assignment title
+	\vspace{6cm} % Whitespace
+	\author{新雅62/CDIE6\quad 2016013327 项雨桐}
+	\date{2019年11月12日} 
+}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+\newpage
+\thispagestyle{empty}
+\tableofcontents
+%---------------------
+\newpage
+\section{实验分析}
+\setcounter{page}{1}
+\setcounter{figure}{0}
+
+\subsection{实验要求}
+分别利用最近邻、双线性、双三次插值方法, 完成图像的旋转扭曲与畸变操作
+
+\subsection{需求分析}
+\setcounter{figure}{0}
+图像操作的实现主要分为两个部分：
+\begin{enumerate}
+	\item 图像坐标变换：坐标变换是图像变换的核心操作。图像变换的基本范式是规定原图像$\mathrm{(srcImage)}$和目标图像$\mathrm{(dstImage)}$坐标间的函数关系，并通过数值计算求取对应的坐标值。
+	\item 像素插值计算：通过$\mathrm{(srcImage)}$对应坐标的像素值，利用一定插值计算的方法获得$\mathrm{(dstImage)}$的对应坐标的像素值。对于RGB图像，可以对每个颜色通道分别插值后再组合获得新图像。
+\end{enumerate} 
+
+\section{方案设计与基本原理}
+\setcounter{figure}{0}
+
+编写完成旋转扭曲和畸变坐标变换的算法，通过$\mathrm{(dstImage)}$获得相应的$\mathrm{(srcImage)}$坐标，通过对$\mathrm{(srcImage)}$坐标进行插值计算，获得对应$\mathrm{(dstImage)}$坐标的像素值。
+
+\subsection{坐标变换}
+\subsubsection{旋转扭曲坐标变换}
+
+旋转扭曲坐标变换需要设置两个参数：最大旋转角$\mathrm{\alpha_{max}}$和旋转半径$radius$。旋转中心为图像中央。
+
+设$\mathrm{(dstImage)}$的某点坐标为$(x', y')$，则可得旋转角为
+
+$$\alpha = \alpha_{max} \cdot \frac{radius-distance}{radius}$$
+
+其中$distance$是$(x',y')$到图像中心的欧式距离。
+
+则对应的$\mathrm{(srcImage)}$的坐标$(x,y)$满足：
+\begin{equation}
+\left\{
+	\begin{aligned}
+		x = x'\cos{\alpha} - y'\sin{\alpha}\\
+		y = x'\sin{\alpha} + y'\cos{\alpha}\\
+	\end{aligned}
+\right.
+\end{equation}
+
+本次实验中选取的旋转角分别为$\frac{\pi}{4}$,$\frac{\pi}{2}$,$\frac{3\pi}{4}$,$\pi$；由于图像为正方形$（512\times512）$，因此选取的旋转半径为图像尺寸的一半（像素是离散的，中心点选为$(255.5,255.5)$，因此半径$radius = 255$）
+
+\subsubsection{图像畸变坐标变换}
+
+图像畸变坐标变换需要设置两个参数：正/负畸变和畸变半径$radius$，畸变中心为图像中央。
+
+设$\mathrm{(dstImage)}$的某点坐标为$(x', y')$，则可得正畸变下$\mathrm{(srcImage)}$的坐标$(x,y)$满足：
+
+\begin{equation}
+	\left\{
+		\begin{aligned}
+			x = [\frac{radius}{distance}\arcsin{(\frac{distance}{radius})}] \cdot x'\\
+			y = [\frac{radius}{distance}\arcsin{(\frac{distance}{radius})}] \cdot y'\\
+		\end{aligned}
+	\right.
+\end{equation}
+
+负畸变下$\mathrm{(srcImage)}$的坐标$(x,y)$满足：
+\begin{equation}
+	\left\{
+		\begin{aligned}
+			x = [\frac{radius}{distance}\sin{(\frac{distance}{radius})}] \cdot x'\\
+			y = [\frac{radius}{distance}\sin{(\frac{distance}{radius})}] \cdot y'\\
+		\end{aligned}
+	\right.
+\end{equation}
+
+其中$distance$是$(x',y')$到图像中心的欧式距离。
+
+本次实验中选取的畸变半径分别为$\frac{3}{4}radius$和$radius$，其中$radius$是旋转变换中使用的半径。
+
+\subsection{插值算法}
+设$(x',y')$经坐标变换得到的$\mathrm{(srcImage)}$浮点型坐标为$(x,y)$，令
+\begin{equation}
+	\left\{
+		\begin{aligned}
+			x = i + u\\
+			y = j + v\\
+		\end{aligned}
+	\right.
+\end{equation}
+其中 $i = floor(x)$, $j = floor(y)$，因此 $ u,v \in [0,1] $
+
+设$f(m,n)$代表$\mathrm{(srcImage)}$在坐标$(m,n)$处的像素值（单通道），则$\mathrm{(dstImage)}$在$\mathrm{(srcImage)}$对应坐标的像素值表示为$f(x,y)$
+
+\subsubsection{最近邻插值}
+\begin{equation}
+	f(x,y)=
+	\begin{cases}
+		f(i,j) & u \leqslant 0.5, v \leqslant 0.5\\
+		f(i + 1,j) & u > 0.5, v \leqslant 0.5\\
+		f(i,j + 1) & u \leqslant 0.5, v > 0.5\\
+		f(i + 1,j + 1) & u > 0.5, v > 0.5
+	\end{cases}
+\end{equation}
+
+\subsubsection{双线性插值}
+\begin{equation}
+	f(x,y)=
+	\begin{bmatrix} 
+		1-u & u
+	\end{bmatrix}
+	\begin{bmatrix} 
+		f(i,j) & f(i,j+1) \\
+		f(i+1,j) & f(i+1,j+1)
+	\end{bmatrix}
+	\begin{bmatrix} 
+		1-v \\ v
+	\end{bmatrix}
+\end{equation}
+
+\subsubsection{双三次插值}
+
+$$f(x,y) = ABC$$
+
+其中
+\begin{equation}
+	A=
+	\begin{bmatrix} 
+		S(1+u) & S(u) & S(1-u) & S(2-u)
+	\end{bmatrix}
+\end{equation}
+
+\begin{equation}
+	B=
+	\begin{bmatrix} 
+		f(i-1,j-1) & f(i-1,j) & f(i-1,j+1) & f(i-1,j+2)\\
+		f(i,j-1) & f(i,j) & f(i,j+1) & f(i,j+2)\\
+		f(i+1,j-1) & f(i+1,j) & f(i+1,j+1) & f(i+1,j+2)\\
+		f(i+2,j-1) & f(i+2,j) & f(i+2,j+1) & f(i+2,j+2)
+	\end{bmatrix}
+\end{equation}
+
+\begin{equation}
+	C=
+	\begin{bmatrix} 
+		S(1+v) \\ S(v) \\ S(1-v) \\ S(2-v)
+	\end{bmatrix}
+\end{equation}
+
+插值基函数：
+\begin{equation}
+	S(x)=
+	\begin{cases}
+		1 - (a+3)|x|^2 + (a+2)|x|^3 & |x| \leqslant 1\\
+		-4a + 8a|x| - 5a|x|^2 + a|x|^3 & 1 < |x| \leqslant 2\\
+		0 & otherwise\\
+	\end{cases}
+\end{equation}
+
+本实验中取$a = -1$
+
+\section{误差分析}
+\setcounter{figure}{0}
+
+\noindent 本实验的误差主要包括以下四种：
+\begin{itemize}
+	\item 观测误差（采样误差）：图像采集设备的光学、机械、电学特性给采样数据带来的误差
+	\item 模型误差：由采样值重建原模拟图像与实际图像函数的误差
+	\item 方法误差：用插值函数重建图像与理想值的误差
+	\item 舍入误差：像素值的量化误差、浮点数据的存储与计算带来的误差等
+\end{itemize}
+
+\noindent 本实验的观测误差已不可考，下面分析其他三种误差：
+
+\subsection{模型误差}
+分析图像重建带来的误差，先引入图像采样与重建的概念。
+
+\subsubsection{图像采样定理}
+设图像在频域内是有限带宽的，也即：
+
+$$\mathcal{F}(\Omega_x,\Omega_y) = 0$$
+
+其中$\| \Omega_x \| > \frac{\pi}{\Delta x}, \| \Omega_y \| > \frac{\pi}{\Delta y}$，$\Delta x$、$\Delta y$是采样间隔，则利用采样值可以精确重建原图像。 设原图像坐标为$(x,y)$，对应的像素值为$f(x,y)$，则：
+
+$$f(x,y) = \sum_{m=-\infty}^{+\infty}\sum_{n=-\infty}^{+\infty}f(m\Delta x,n\Delta y)\cdot \mathrm{sinc}(x-m\Delta x)\cdot \mathrm{sinc}(y-n\Delta y)$$
+
+其中$\mathrm{sinc}(x) = \frac{\sin(\pi x)}{\pi x}$
+
+在本实验中，我们取$\Delta x = \Delta y = 1$。
+
+\subsubsection{误差分析}
+若图像在频域内有限带宽，由IFT的知识可知图像在空域内是无限延展的；反之，对任意有限范围内的图像，其频域内都有无限的高频成分。但由于人眼对图像的高频成分不敏感，所以由频率截断（低通滤波）带来的误差可以忽略不计，也即认为图像采样定理一般是成立的。这样，在图像函数满足Dirichlet条件的前提下，利用$\mathrm{sinc(x)}$作为插值函数的图像重建函数与原图像的函数表达严格相等。
+
+\subsubsection{总结}
+在忽略低通滤波带来的截断误差、图像函数满足Dirichlet条件的前提下，图像函数
+
+$$f(x,y) = \sum_{m=-\infty}^{+\infty}\sum_{n=-\infty}^{+\infty}f(m,n)\cdot \mathrm{sinc}(x-m)\cdot \mathrm{sinc}(y-n)$$
+
+不存在模型误差。
+
+\subsection{方法误差}
+方法误差：
+
+$$R(x,y) = f(x,y) - L(x,y)$$
+
+其中$L(x,y)$是插值函数。
+
+令
+\begin{equation}
+	\left\{
+		\begin{aligned}
+			x = i + u && i = \mathrm{floor}(x)\\
+			y = j + v && j = \mathrm{floor}(y)
+		\end{aligned}
+	\right.
+\end{equation}
+
+\subsubsection{最近邻插值}
+插值函数：
+
+\begin{equation}
+	\begin{aligned}
+	L(x,y) = f(i,j)\cdot\mathbbm{1}\bigg|_{u\leqslant 0.5, v\leqslant 0.5} + f(i+1,j)\cdot\mathbbm{1}\bigg|_{u > 0.5, v\leqslant 0.5} \\ 
+	+ f(i,j+1)\cdot\mathbbm{1}\bigg|_{u\leqslant 0.5, v > 0.5} + f(i+1,j+1)\cdot \mathbbm{1} \bigg|_{u > 0.5, v > 0.5}
+	\end{aligned}
+\end{equation}
+
+误差函数：
+\begin{equation}
+	\begin{aligned}
+		& \mathrm{R}(x,y) = f(i,j) \cdot [\mathrm{sinc}(u) \cdot \mathrm{sinc}(v) - \mathbbm{1}\bigg|_{u\leqslant 0.5, v\leqslant 0.5}] \\
+		& + f(i+1,j) \cdot [\mathrm{sinc}(u-1) \cdot \mathrm{sinc}(v) - \mathbbm{1}\bigg|_{u > 0.5, v\leqslant 0.5}]\\ 
+		& + f(i,j+1) \cdot [\mathrm{sinc}(u) \cdot \mathrm{sinc}(v-1) - \mathbbm{1}\bigg|_{u\leqslant 0.5, v > 0.5}]\\ 
+		& + f(i+1,j+1) \cdot [\mathrm{sinc}(u-1) \cdot \mathrm{sinc}(v-1) - \mathbbm{1}\bigg|_{u > 0.5, v > 0.5}]\\ 
+		& + \mathop{\sum_{m=-\infty}^{+\infty}\sum_{n=-\infty}^{+\infty}}_{\|x-m\|>1\atop \|y-n\|>1} f(m,n)\cdot \mathrm{sinc}(x-m)\cdot \mathrm{sinc}(y-n)\\
+		& = \mathrm{Int}(u,v) + \mathrm{Res}(x,y)
+	\end{aligned}
+\end{equation}
+
+$g(s,t) = \mathrm{sinc}(s)\cdot \mathrm{sinc}(t)$ 在 $[0,1]^2$ 上的图像如下所示：
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{max_nearest.png}
+    \caption{$\mathrm{sinc}(s)\cdot \mathrm{sinc}(t)$图像}
+    \label{fig:3.1}
+\end{figure}
+
+因此当$s = t = 0.5$时$g(s,t)-\mathbbm{1}\bigg|_{s < 0.5, v < 0.5}$取最大值为$\frac{4}{\pi^2}$
+
+则
+\begin{equation}
+	\begin{aligned}
+		& \mathrm{Int}(u,v) \leqslant \frac{4}{\pi^2} \cdot \max\{f(i:i+1, j:j+1)\} \\
+		& + (\frac{4}{\pi^2} - 1)\cdot(\sum_{k=i}^{i+1}\sum_{l=j}^{j+1} f(k,l)- \max\{f(i:i+1, j:j+1)\})\\
+		& \approx 0.41 \cdot \max\{f(i:i+1, j:j+1)\} \\
+		& - 0.59 \cdot(\sum_{k=i}^{i+1}\sum_{l=j}^{j+1} f(k,l)- \max\{f(i:i+1, j:j+1)\})
+	\end{aligned}
+\end{equation}
+
+对于$\mathrm{sinc}(x-m)\cdot \mathrm{sinc}(y-n)$, 当$\|x-m\|>1, \|y-n\|>1$时，由于$x,y$独立，因此
+$$\mathrm{sinc}(x-m)\cdot \mathrm{sinc}(y-n)\leqslant\mathrm{sinc^2}(w_m)$$
+其中$w_{max}$是$\mathrm{sinc^2}(w)$的非零极值点，满足超越方程$\tan(w_{max}) = w_{max}$，$ \| w_{max} \| > 1 $，分析可知点列$w_{max}$的正数部分第一项为$w_1 = 1.43$，当$n\rightarrow \infty$时一致收敛于$n + 0.5$，因此$n + 0.4 < w_n < n + 0.5$。
+
+故：
+\begin{equation}
+	\begin{aligned}
+		& \mathrm{Res}(x,y) \leqslant \max{f(m,n)}\cdot\mathop{\sum_{m=-\infty}^{+\infty}\sum_{n=-\infty}^{+\infty}}_{\|x-m\|>1 \atop \|y-n\|>1} \mathrm{sinc}(x-m)\cdot \mathrm{sinc}(y-n) \\ 
+		& \leqslant \max{f(m,n)}\cdot \sum_{w_{max}\in(-\infty,+\infty)\backslash\{0\}}\mathrm{sinc^2}(w_{max}) \\
+		& \leqslant \max{f(m,n)}\cdot \sum_{w_{max}\in(-\infty,+\infty)\backslash\{0\}}[\frac{\sin(\pi w_{max})}{\pi w_{max}}]^2\nonumber\\
+		& = \max{f(m,n)}\cdot \frac{2}{\pi^2}\sum_{w_{max}\in(0,+\infty)}[\frac{\sin(\pi w_{max})}{w_{max}}]^2\\
+		& \leqslant \max{f(m,n)}\cdot \frac{2}{\pi^2}\sum_{w_{max}\in(0,+\infty)}(\frac{1}{w_{max}})^2\\
+		& \leqslant \max{f(m,n)}\cdot \frac{2}{\pi^2}\sum_{n = 1}^{+\infty}(\frac{1}{n+0.4})^2\\
+		& \leqslant \max{f(m,n)}\cdot \frac{2}{\pi^2}\cdot 1.03
+	\end{aligned}
+\end{equation}
+
+因此
+\begin{equation}
+	\begin{aligned}
+		& \mathrm{R}(x,y) \leqslant \frac{4}{\pi^2} \cdot \max\{f(i:i+1, j:j+1)\} \\
+		& + (\frac{4}{\pi^2} - 1)\cdot(\sum_{k=i}^{i+1}\sum_{l=j}^{j+1} f(k,l)- \max\{f(i:i+1, j:j+1)\})\\
+		& + \frac{2}{\pi^2}\sum_{n = 1}^{+\infty}(\frac{1}{n+0.4})^2 \cdot \max{f(m,n)}\\
+		& \approx 0.41 \cdot \max\{f(i:i+1, j:j+1)\}\\ 
+		& - 0.59 \cdot (\sum_{k=i}^{i+1}\sum_{l=j}^{j+1} f(k,l)- \max\{f(i:i+1, j:j+1)\})\\ 
+		& + 0.21 \cdot \max_{m\in\mathbb{Z}\backslash\{i,i+1\}\atop n\in\mathbb{Z}\backslash\{j,j+1\}}{f(m,n)}
+\end{aligned}
+\end{equation}
+是相关像素点值的线性组合
+
+\subsubsection{双线性插值}
+插值函数：
+\begin{equation}
+	\begin{aligned}
+	& L(x,y) = f(i,j)\cdot (1-u)(1-v) + f(i+1,j)\cdot u(1-v) \\
+	& + f(i,j+1)\cdot (1-u)v + f(i+1,j+1)\cdot uv
+	\end{aligned}
+\end{equation}
+
+误差函数：
+\begin{equation}
+	\begin{aligned}
+		& \mathrm{R}(x,y) = f(i,j) \cdot [ \mathrm{sinc}(u) \cdot \mathrm{sinc}(v) - (1-u)(1-v)] \\
+		& + f(i+1,j) \cdot [ \mathrm{sinc}(u-1) \cdot \mathrm{sinc}(v) - u(1-v)]\\ 
+		& + f(i,j+1) \cdot [ \mathrm{sinc}(u) \cdot \mathrm{sinc}(v-1) - (1-u)v]\\ 
+		& + f(i+1,j+1) \cdot [ \mathrm{sinc}(u-1) \cdot \mathrm{sinc}(v-1) - uv]\\ 
+		& + \mathop{\sum_{m=-\infty}^{+\infty}\sum_{n=-\infty}^{+\infty}}_{\|x-m\|>1\atop \|y-n\|>1} f(m,n)\cdot \mathrm{sinc}(x-m)\cdot \mathrm{sinc}(y-n)\\
+		& = \mathrm{Int}(u,v) + \mathrm{Res}(x,y)
+	\end{aligned}
+\end{equation}
+
+定义$g(s,t) =  \mathrm{sinc}(s) \cdot \mathrm{sinc}(t) - (1-s)(1-t)$, $(s,t)\in [0,1]^{2}$
+
+$g(s,t)$ 在 $[0,1]^2$ 上的图像如下所示：
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{max_bilinear.png}
+    \caption{$g(s,t)$图像}
+    \label{fig:3.2}
+\end{figure}
+
+$(s,t)\approx (0.27,0.27)$时，$\max{g(s,t)} \approx 0.25$
+
+$\mathrm{Res}(x,y)$的分析同最近邻插值，因此：
+\begin{equation}
+	\begin{aligned}
+		& \mathrm{R}(x,y) \leqslant 0.25 * \max\{f(i:i+1, j:j+1)\} + 0.21 \cdot \max_{m\in\mathbb{Z}\backslash\{i,i+1\}\atop n\in\mathbb{Z}\backslash\{j,j+1\}}{f(m,n)}
+	\end{aligned}
+\end{equation}
+
+也是相关像素点值的线性组合
+
+\subsubsection{双三次插值}
+
+双三次插值的分析方法和前两者类似，因公式过于繁琐不再赘述。另一种比较好的估计方法是：
+\begin{equation}
+	\begin{aligned}
+	& \left|R_{x}(x, y)\right| \leqslant \frac{1}{4 !} \max \left|\frac{\partial^{4} f}{\partial x^{4}}\right||(1+u)u(1-u)(2-u)|=\frac{3}{128} \max \left|\frac{\partial^{4} f}{\partial x^{4}}\right|\\
+	& \left|R_{y}(x, y)\right| \leqslant \frac{1}{4 !} \max \left|\frac{\partial^{4} f}{\partial x^{4}}\right||(1+v)v(1-v)(2-v)|=\frac{3}{128} \max \left|\frac{\partial^{4} f}{\partial y^{4}}\right|
+	\end{aligned}
+\end{equation}
+
+也即
+\begin{equation}
+	\begin{aligned}
+		|R(x,y)|\leqslant \left|R_{x}(x, y)\right|+\left|R_{y}(x, y)\right|=\frac{3}{128}\left(\max \left|\frac{\partial^{4} f}{\partial x^{4}}\right|+\max \left|\frac{\partial^{4} f}{\partial y^{4}}\right|\right)
+	\end{aligned}
+\end{equation}
+
+
+\subsection{舍入误差}
+舍入误差的来源如下：
+
+\subsubsection{量化误差}
+量化误差主要是指像素值在量化为离散值时产生的误差。由于像素值的量化是向下取整，所以绝对误差为1，相对误差为1/256。
+
+另外，在双三次插值出现overshooting和undershooting现象时采用clamp函数修正也会带来误差。
+
+\subsubsection{浮点数存储/计算误差}
+\begin{itemize}
+	\item 程序中的$\mathrm{(dstImage)}$坐标值和$\mathrm{(srcImage)}$中心点坐标值、旋转半径不存在误差\footnote{中心点坐标值十进制为255.5、旋转半径0.75倍radius为191.25，在二进制用float存储时可以准确表示}
+	\item 利用坐标计算的距离$\mathrm{distance}$和最大旋转角$\mathrm{\alpha_{max}}$在存储时存在截断误差
+	\item 利用二者计算得到变换后$\mathrm{(srcImage)}$对应的浮点坐标$(x,y)$、插值计算中得到的插值基函数、像素值存在计算带来的误差累积和本身的存储误差
+\end{itemize}
+
+\subsubsection{截断误差}
+float格式利用23个比特位表示小数部分，因此所有float类型变量的截断误差是$(\frac{1}{2})^{-24}$。
+
+\subsubsection{旋转坐标的计算误差}
+\noindent 由
+$$\| \Delta A\| \leqslant \max{\|\frac{\partial f}{\partial x}\|}\cdot \|\Delta x\| + \max{\|\frac{\partial f}{\partial y}\|}\cdot \|\Delta y\|$$
+和
+$$\alpha = \alpha_{max} \cdot \frac{radius-distance}{radius}$$
+$$\Delta \mathrm{distance} = \Delta \mathrm{\alpha_{max}} = (\frac{1}{2})^{-24}$$
+知：
+$$\frac{\partial}{\partial \alpha_{max}} = \frac{radius - distance}{radius}$$
+$$\frac{\partial}{\partial (distance)} = -\frac{\alpha_{max}}{radius}$$
+因此：
+$$\| \Delta \alpha\| \leqslant \max{\|\frac{radius - distance}{radius}\|}\cdot (\frac{1}{2})^{-24} + \max{\|\frac{\alpha_{max}}{radius}\|}\cdot (\frac{1}{2})^{-24}$$
+对应的$\mathrm{(srcImage)}$的坐标$(x,y)$满足：
+\begin{equation}
+\left\{
+	\begin{aligned}
+		x = x'\cos{\alpha} - y'\sin{\alpha}\\
+		y = x'\sin{\alpha} + y'\cos{\alpha}\\
+	\end{aligned}
+\right.
+\end{equation}
+则：
+$$\frac{\partial x}{\partial \alpha} = -x'\sin{\alpha} - y'\cos{\alpha}$$
+$$\frac{\partial y}{\partial \alpha} = x'\cos{\alpha} - y'\sin{\alpha}$$
+因此：
+$$\| \Delta x\| \leqslant \max{\|-x'\sin{\alpha} - y'\cos{\alpha}\|}\cdot \| \Delta \alpha\|$$
+$$\| \Delta y\| \leqslant \max{\|x'\sin{\alpha} + y'\cos{\alpha}\|}\cdot \| \Delta \alpha\|$$
+
+\subsubsection{畸变坐标的计算误差}
+\noindent 正畸变下$\mathrm{(srcImage)}$的坐标$(x,y)$满足：
+\begin{equation}
+	\left\{
+		\begin{aligned}
+			x = [\frac{radius}{distance}\arcsin{(\frac{distance}{radius})}] \cdot x'\\
+			y = [\frac{radius}{distance}\arcsin{(\frac{distance}{radius})}] \cdot y'\\
+		\end{aligned}
+	\right.
+\end{equation}
+则
+$$\frac{\partial x}{\partial distance} = [\frac{1}{distance\sqrt{1-(\frac{distance}{radius})^2}} - \frac{radius}{distance^2}\arcsin{(\frac{distance}{radius})}] \cdot x'$$
+$$\frac{\partial y}{\partial distance} = [\frac{1}{distance\sqrt{1-(\frac{distance}{radius})^2}} - \frac{radius}{distance^2}\arcsin{(\frac{distance}{radius})}] \cdot y'$$
+因此：
+$$\| \Delta x\| \leqslant \max{\|[\frac{1}{distance\sqrt{1-(\frac{distance}{radius})^2}} - \frac{radius}{distance^2}\arcsin{(\frac{distance}{radius})}] \cdot x'\|}\cdot (\frac{1}{2})^{-24}$$
+$$\| \Delta y\| \leqslant \max{\|[\frac{1}{distance\sqrt{1-(\frac{distance}{radius})^2}} - \frac{radius}{distance^2}\arcsin{(\frac{distance}{radius})}] \cdot x'\|}\cdot (\frac{1}{2})^{-24}$$
+
+\noindent 负畸变下$\mathrm{(srcImage)}$的坐标$(x,y)$满足：
+\begin{equation}
+	\left\{
+		\begin{aligned}
+			x = [\frac{radius}{distance}\sin{(\frac{distance}{radius})}] \cdot x'\\
+			y = [\frac{radius}{distance}\sin{(\frac{distance}{radius})}] \cdot y'\\
+		\end{aligned}
+	\right.
+\end{equation}
+则
+$$\frac{\partial x}{\partial distance} = [\frac{1}{distance}\cos{\frac{distance}{radius}} - \frac{radius}{distance^2}\sin{(\frac{distance}{radius})}] \cdot x'$$
+$$\frac{\partial y}{\partial distance} = [\frac{1}{distance}\cos{\frac{distance}{radius}} - \frac{radius}{distance^2}\sin{(\frac{distance}{radius})}] \cdot y'$$
+因此：
+$$\| \Delta x\| \leqslant \max{\|[\frac{1}{distance}\cos{\frac{distance}{radius}} - \frac{radius}{distance^2}\sin{(\frac{distance}{radius})}] \cdot x'\|}\cdot (\frac{1}{2})^{-24}$$
+$$\| \Delta y\| \leqslant \max{\|[\frac{1}{distance}\cos{\frac{distance}{radius}} - \frac{radius}{distance^2}\sin{(\frac{distance}{radius})}] \cdot x'\|}\cdot (\frac{1}{2})^{-24}$$
+
+\subsubsection{最近邻插值的计算误差}
+最近邻插值算法：
+\begin{equation}
+	f(x,y)=
+	\begin{cases}
+		f(i,j) & u \leqslant 0.5, v \leqslant 0.5\\
+		f(i + 1,j) & u > 0.5, v \leqslant 0.5\\
+		f(i,j + 1) & u \leqslant 0.5, v > 0.5\\
+		f(i + 1,j + 1) & u > 0.5, v > 0.5
+	\end{cases}
+\end{equation}
+
+其中：
+\begin{equation}
+	\left\{
+		\begin{aligned}
+			x = i + u\\
+			y = j + v\\
+		\end{aligned}
+	\right.
+\end{equation}
+$i = floor(x)$, $j = floor(y)$，因此$\Delta u = \Delta x$，$\Delta v = \Delta y$
+
+除去像素值本身的量化误差，由上述公式可知，算法引入的误差即为$\Delta u = \Delta x$和$\Delta v = \Delta y$
+
+\subsubsection{双线性插值的计算误差}
+双线性插值算法：
+\begin{equation}
+	\begin{aligned}
+	& f(x,y) = f(i,j)\cdot (1-u)(1-v) + f(i+1,j)\cdot u(1-v) \\
+	& + f(i,j+1)\cdot (1-u)v + f(i+1,j+1)\cdot uv
+	\end{aligned}
+\end{equation}
+\begin{equation}
+	\left\{
+		\begin{aligned}
+			x = i + u\\
+			y = j + v\\
+		\end{aligned}
+	\right.
+\end{equation}
+$i = floor(x)$, $j = floor(y)$，因此$\Delta u = \Delta x$，$\Delta v = \Delta y$
+
+除去像素值本身的量化误差，由上述公式可知：
+$$\frac{\partial f}{\partial u} = (1-v)[f(i+1,j)-f(i,j)] + v[f(i+1,j+1)-f(i,j+1)]$$
+$$\frac{\partial f}{\partial v} = (1-u)[f(i,j+1)-f(i,j)] + u[f(i+1,j+1)-f(i+1,j)]$$
+因此：
+\begin{equation}
+	\begin{aligned}
+		\| \Delta f\| \leqslant \max_{(u,v)\in [0,1]^{2}}{\|(1-v)[f(i+1,j)-f(i,j)] + v[f(i+1,j+1)-f(i,j+1)]\|}\cdot \|\Delta x\| \\
+		+ \max_{(u,v)\in [0,1]^{2}}{\|(1-u)[f(i,j+1)-f(i,j)] + u[f(i+1,j+1)-f(i+1,j)]\|}\cdot \|\Delta y\|
+	\end{aligned}
+\end{equation}
+
+\subsubsection{双三次插值的计算误差}
+\noindent 插值基函数：
+\begin{equation}
+	S(x)=
+	\begin{cases}
+		1 - 2|x|^2 + |x|^3 & |x| \leqslant 1\\
+		4 - 8|x| + 5|x|^2 - |x|^3 & 1 < |x| \leqslant 2\\
+		0 & otherwise\\
+	\end{cases}
+\end{equation}
+插值函数：
+$$f(x,y) = ABC$$
+其中
+\begin{equation}
+	A=
+	\begin{bmatrix} 
+		S(1+u) & S(u) & S(1-u) & S(2-u)
+	\end{bmatrix}
+\end{equation}
+
+\begin{equation}
+	B=
+	\begin{bmatrix} 
+		f(i-1,j-1) & f(i-1,j) & f(i-1,j+1) & f(i-1,j+2)\\
+		f(i,j-1) & f(i,j) & f(i,j+1) & f(i,j+2)\\
+		f(i+1,j-1) & f(i+1,j) & f(i+1,j+1) & f(i+1,j+2)\\
+		f(i+2,j-1) & f(i+2,j) & f(i+2,j+1) & f(i+2,j+2)
+	\end{bmatrix}
+\end{equation}
+
+\begin{equation}
+	C=
+	\begin{bmatrix} 
+		S(1+v) \\ S(v) \\ S(1-v) \\ S(2-v)
+	\end{bmatrix}
+\end{equation}
+则
+\begin{equation}
+	\begin{aligned}
+		\frac{\partial f}{\partial u} = \frac{\partial A}{\partial u}BC\\
+		\frac{\partial f}{\partial v} = AB\frac{\partial C}{\partial v}
+	\end{aligned}
+\end{equation}
+其中
+\begin{equation}
+	\frac{\partial A}{\partial u}=
+	\begin{bmatrix} 
+		\frac{\partial S(1+u)}{\partial u}  & \frac{\partial S(u)}{\partial u} & \frac{\partial S(1-u)}{\partial u} & \frac{\partial S(2-u)}{\partial u}
+	\end{bmatrix}
+\end{equation}
+\begin{equation}
+	\frac{\partial C}{\partial v}=
+	\begin{bmatrix} 
+		\frac{\partial S(1+v)}{\partial v} \\ \frac{\partial S(v)}{\partial v} \\ \frac{\partial S(1-v)}{\partial v} \\ \frac{\partial S(2-v)}{\partial v}
+	\end{bmatrix}
+\end{equation}
+
+对$t\in[0,1]$
+$$\frac{\partial S(1+t)}{\partial t} = -1 + 4t - 3t^2$$
+$$\frac{\partial S(t)}{\partial t} = -4t + 3t^2$$
+$$\frac{\partial S(1-t)}{\partial t} = 1 + 2t -3t^2$$
+$$\frac{\partial S(2-t)}{\partial t} = -24 + 22t - 3t^2$$
+
+因此：
+\begin{equation}
+	\begin{aligned}
+		\| \Delta f\| \leqslant \max_{(u,v)\in [0,1]^{2}}{\|\frac{\partial A}{\partial u}BC\|}\cdot \|\Delta x\| 
+		+ \max_{(u,v)\in [0,1]^{2}}{\|AB\frac{\partial C}{\partial v}\|}\cdot \|\Delta y\|
+	\end{aligned}
+\end{equation}
+
+\section{实验总结}
+\subsection{利用插值法进行图像变形的一般过程}
+\begin{enumerate}
+	\item 图片预处理，一般包括通道分离等
+	\item 确定坐标变换函数，由目标图像对应整型坐标得到原图像浮点坐标
+	\item 利用插值算法，从原图像整型坐标的像素值获得浮点坐标的像素值，也即目标图像对应点的像素值
+	\item 图片终处理，例如通道合成，偏差修正等
+\end{enumerate}
+
+\subsection{线性插值方法的特性}
+线性插值方法表现在预测点的像素值是原图像像素值的线性组合。不同的线性组合系数、原图像像素值的选取会得到不同的线性插值方法。
+
+最近邻插值是一种零次插值，表现在只选取了原图像的1个采样点来预测对应点的像素；双线性插值是两个方向上的一次插值，因此利用了最近的4个点的像素，插值基函数是线性的；双三次插值是两个方向上的三次插值，利用了附近16个点的像素值，插值基函数为3次，可以通过选取不同的参数来调节。
+
+插值基函数的特性\footnote{\url{https://dailc.github.io/2017/11/01/imageprocess_bicubicinterpolation.html}}：
+\begin{itemize}
+	\item $S(0) = 1$
+	\item $S(n) = 0 , n \in \mathbb{Z}\backslash\{0\}$
+	\item $S(x) = 0$, 当 $x$ 超过插值范围时
+\end{itemize}
+
+本实验中的插值基函数是对理想插值函数$sinc(x)$的逼近
+
+这三种线性插值均采用多项式函数作为插值基函数，如果图像函数$f(x,y)$满足一定的光滑特性，则可以证明这些经插值后的图像一致收敛于原图像函数；且多项式阶次越高、选取的采样点越多，方法误差就越小，表现在图像上则是人工痕迹例如锯齿等现象越不明显。因此，从获得的图像中可以看出，双三次插值得到的图像最自然，双线性次之，最近邻最差。但多项式阶次和采样点数目的增长带来的是计算复杂度的增加，因此在实际应用中，应当根据所需的性能与计算开销之间进行平衡，合理选取插值方案。
+
+从分析中也可以看出，线性插值方法的误差对于各采样点像素值也是线性的。
+
+另外还需指出的是，双三次插值有可能造成overshooting或undershooting现象，也即某像素预测值超出了0～255的范围\footnote{\url{https://github.com/pytorch/pytorch/issues/21044}}。表现在图像上就是产生许多纯度高的彩色噪点\footnote{其实是undershooting产生的负值在强制转换为uchar类型时变为overshooting}。这时需要利用clamp函数来将插值结果限制为0～255的范围。
+
+\setcounter{figure}{0}
+
+\end{document}
